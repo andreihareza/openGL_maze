@@ -1,3 +1,5 @@
+#include <queue>
+
 #include "CMaze.hpp"
 #include "utility.hpp"
 
@@ -5,13 +7,134 @@ CMaze::CMaze()
 : mMaze(NUtility::lines, std::vector<CCell>(NUtility::columns))
 
 {
-    createBorder();
-    generateMaze(0, NUtility::lines, 0, NUtility::columns);
-
-    printMaze(std::cout);
 }
 
- void CMaze::generateMaze(std::uint32_t up, std::uint32_t down,
+void CMaze::generateMaze(std::uint32_t up, std::uint32_t down,
+                          std::uint32_t left, std::uint32_t right)
+{
+    std::cout << "CMaze::" << __func__ << "():" << " up=" << up << " down=" << down << " left=" << left << " right=" << right << std::endl;
+
+    if ((down > up) && (right > left))
+    {
+        createBorder();
+        generateMazeRec(up, down, left, right);
+        printMaze(std::cout);
+
+        findLongestPath();
+    }
+}
+
+void CMaze::findLongestPath()
+{
+    std::cout << "CMaze::" << __func__ << "()" << std::endl;
+    std::pair<int, int> startPos = getStartPosition();
+
+    std::vector<int> dx = {-1, 1,  0, 0};
+    std::vector<int> dy = { 0, 0, -1, 1};
+
+    std::queue<std::pair<int, int>> bfsQueue;
+
+    std::vector<std::vector<bool>> alreadyVisited(
+            mMaze.size(), std::vector<bool>(mMaze[0].size(), false));
+
+    std::vector<std::vector<std::pair<int, int>>> from(
+            mMaze.size(), std::vector<std::pair<int, int>>(mMaze[0].size(), {0, 0}));
+
+    bfsQueue.push(startPos);
+    alreadyVisited[startPos.first][startPos.second] = true;
+    from[startPos.first][startPos.second] = startPos;
+    std::pair<int, int> last = startPos;
+
+    while (bfsQueue.empty() == false)
+    {
+        std::pair<int, int> current = bfsQueue.front();
+        bfsQueue.pop();
+
+        for (std::uint32_t currentDirection=0; currentDirection<4; ++currentDirection)
+        {
+            if (canMove(current, static_cast<Direction>(currentDirection)))
+            {
+                std::pair<int, int> next =
+                     {current.first+dx[currentDirection], current.second+dy[currentDirection]};
+
+                if (isValidCoord(next) && alreadyVisited[next.first][next.second] == false)
+                {
+                    alreadyVisited[next.first][next.second] = true;
+                    from[next.first][next.second] = current;
+                    bfsQueue.push(next);
+                }
+            }
+        }
+        last = current;
+    }
+    mLongestPath.clear();
+    mLongestPath.push_back(last);
+
+    while (from[last.first][last.second] != last)
+    {
+        last = from[last.first][last.second];
+        mLongestPath.push_back(last);
+    }
+}
+
+std::pair<int, int> CMaze::getStartPosition()
+{
+    std::cout << "CMaze::" << __func__ << "()" << std::endl;
+    std::vector<int> dx = {-1, 1,  0, 0};
+    std::vector<int> dy = { 0, 0, -1, 1};
+
+    std::queue<std::pair<int, int>> bfsQueue;
+    std::vector<std::vector<bool>> alreadyVisited(mMaze.size(), std::vector<bool>(mMaze[0].size(), false));
+
+    bfsQueue.push({0, 0});
+    alreadyVisited[0][0] = true;
+
+    std::pair<int, int> last = {0, 0};
+
+    while (bfsQueue.empty() == false)
+    {
+        std::pair<int, int> current = bfsQueue.front();
+        bfsQueue.pop();
+
+        for (std::uint32_t currentDirection=0; currentDirection<4; ++currentDirection)
+        {
+            if (canMove(current, static_cast<Direction>(currentDirection)))
+            {
+                std::pair<int, int> next =
+                     {current.first+dx[currentDirection], current.second+dy[currentDirection]};
+
+                if (isValidCoord(next) && alreadyVisited[next.first][next.second] == false)
+                {
+                    alreadyVisited[next.first][next.second] = true;
+                    bfsQueue.push(next);
+                }
+            }
+        }
+
+        last = current;
+    }
+
+    return last;
+}
+
+std::vector<std::pair<std::uint32_t, std::uint32_t>> CMaze::getLongestPath()
+{
+    std::cout << "CMaze::" << __func__ << "()" << std::endl;
+    return mLongestPath;
+}
+
+bool CMaze::canMove(std::pair<int, int> from, Direction dir)
+{
+    return mMaze[from.first][from.second].hasBorder(dir) == false;
+}
+
+bool CMaze::isValidCoord(std::pair<int, int> position)
+{
+    return position.first  >= 0 && position.first  < static_cast<int>(mMaze.size())
+        && position.second >= 0 && position.second < static_cast<int>(mMaze[0].size());
+}
+
+void CMaze::generateMazeRec(std::uint32_t up, std::uint32_t down,
                           std::uint32_t left, std::uint32_t right)
 {
     // std::cout << "CMaze::" << __func__ << "():" << " up=" << up << " down=" << down << " left=" << left << " right=" << right << std::endl;
@@ -35,10 +158,10 @@ CMaze::CMaze()
     fillVerticalLine(verticalLine, up, horizontalLine, remaning[toInt(Direction::Up)]);
     fillVerticalLine(verticalLine, horizontalLine, down, remaning[toInt(Direction::Down)]);
 
-    generateMaze(up, horizontalLine, left, verticalLine);  /* Top left */
-    generateMaze(up, horizontalLine, verticalLine, right); /* Top right */
-    generateMaze(horizontalLine, down, left, verticalLine);  /* Bottom left */
-    generateMaze(horizontalLine, down, verticalLine, right); /* Bottom right */
+    generateMazeRec(up, horizontalLine, left, verticalLine);  /* Top left */
+    generateMazeRec(up, horizontalLine, verticalLine, right); /* Top right */
+    generateMazeRec(horizontalLine, down, left, verticalLine);  /* Bottom left */
+    generateMazeRec(horizontalLine, down, verticalLine, right); /* Bottom right */
 }
 
 void CMaze::createBorder()

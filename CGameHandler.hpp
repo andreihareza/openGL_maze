@@ -10,6 +10,8 @@ public:
 
 private:
     void drawMaze();
+    void requestDrawPath();
+    void requestDrawLines();
 
     COpenGLHandler & mOpenGLHandler;
     CMaze mMaze;

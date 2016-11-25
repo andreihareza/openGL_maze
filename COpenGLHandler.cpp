@@ -10,7 +10,7 @@ COpenGLHandler::COpenGLHandler(int argc, char ** argv)
     std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
     /* Initialize open GL */
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
 
     /* Initialize window */
     glutInitWindowPosition(100, 100);
@@ -24,7 +24,7 @@ COpenGLHandler::COpenGLHandler(int argc, char ** argv)
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
     glClear(GL_COLOR_BUFFER_BIT);
-    glFlush();
+    glutSwapBuffers();
 
     createShaders();
     setOpenGLCallbacks();
@@ -185,7 +185,7 @@ void COpenGLHandler::renderFunction()
         func();
     }
 
-    glFlush();
+    glutSwapBuffers();
 }
 
 void COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
@@ -209,6 +209,31 @@ void COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
             glLineWidth(lineWidth);
         }
         glDrawArrays(GL_LINES, start, 2);
+    };
+
+    mDrawFunctions.push_back(drawFunc);
+}
+void COpenGLHandler::addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
+        glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+    std::uint32_t sizeBeforeAdd = mVboData.size();
+
+    mVboData.push_back(firstPoint);
+    mColorData.push_back(color);
+
+    mVboData.push_back(secondPoint);
+    mColorData.push_back(color);
+
+    mVboData.push_back(thirdPoint);
+    mColorData.push_back(color);
+
+    mVboData.push_back(fourthPoint);
+    mColorData.push_back(color);
+
+    std::function<void()> drawFunc = [start = sizeBeforeAdd]()
+    {
+        glDrawArrays(GL_TRIANGLE_STRIP, start, 4);
     };
 
     mDrawFunctions.push_back(drawFunc);

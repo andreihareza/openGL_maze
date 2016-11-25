@@ -19,6 +19,10 @@ public:
 
     void addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
             glm::vec4 color, float lineWidth);
+
+    void addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
+            glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color);
+
     void clearDrawData();
     void reDraw();
 
