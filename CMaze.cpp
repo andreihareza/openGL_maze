@@ -125,6 +125,8 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> CMaze::getLongestPath()
 
 bool CMaze::canMove(std::pair<int, int> from, Direction dir)
 {
+    // std::cout << "CMaze::" << __func__ << "(): from = (" << from.first << " " << from.second << "), dir = " << static_cast<std::uint32_t>(dir) << std::endl;
+
     return mMaze[from.first][from.second].hasBorder(dir) == false;
 }
 

@@ -1,6 +1,11 @@
 #pragma once
 #include <vector>
 #include <functional>
+#include <chrono>
+#include <unordered_map>
+
+#include "IOpenGLListener.hpp"
+#include "utility.hpp"
 
 #include <GL/glew.h>
 #include <GL/freeglut.h>
@@ -9,24 +14,45 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+using namespace std::chrono_literals;
+
 class COpenGLHandler
 {
 public:
-    COpenGLHandler(int argc, char ** argv);
+    COpenGLHandler(int argc, char ** argv, IOpenGLListener & listener);
     ~COpenGLHandler();
 
     void init();
 
-    void addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
+    std::uint32_t addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
             glm::vec4 color, float lineWidth);
 
-    void addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
+    std::uint32_t addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
             glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color);
+
+    void moveFilledRectangle(std::uint32_t startPos,
+            glm::vec4 firstPoint, glm::vec4 secondPoint,
+            glm::vec4 thirdPoint, glm::vec4 fourthPoint,
+            std::chrono::milliseconds time = 0ms);
 
     void clearDrawData();
     void reDraw();
 
+    bool isMoving();
+
 private:
+    /* ********************** Smooth move ********************** */
+    void smoothMoveFilledRectangle(std::uint32_t startPos,
+            glm::vec4 firstPoint, glm::vec4 secondPoint,
+            glm::vec4 thirdPoint, glm::vec4 fourthPoint,
+            std::chrono::milliseconds time);
+
+    void movePoint(glm::vec4 & from, glm::vec4 to,
+            std::chrono::milliseconds time);
+
+    std::unordered_map<std::uint32_t, std::function<void()>> mTimerFunctions;
+    bool mIsMoving;
+    /* ********************** Smooth move ********************** */
 
     /* ************************ Shaders ************************ */
     void createShaders();
@@ -52,6 +78,18 @@ private:
 
     static void renderFunctionCallback();
     void renderFunction();
+
+    static void specialKeyFunctionCallback(int key, int x, int y);
+    void specialKeyFunction(int key);
+
+    static void specialKeyUpFunctionCallback(int key, int x, int y);
+    void specialKeyUpFunction(int key);
+
+    static void idleFunctionCallback();
+    void idleFunction();
+
+    static void timerFuncCallback(int value);
+    void timerFunc(std::uint32_t functionId);
     /* *********************** Callbacks *********************** */
 
     /* ************************** VBO ************************** */
@@ -67,7 +105,9 @@ private:
     /* ************************** VBO ************************** */
 
 
-
     static COpenGLHandler * stCurrentObject;
+    IOpenGLListener & mListener;
+
+    static const constexpr std::chrono::milliseconds timeInFrame = 17ms;
 };
 

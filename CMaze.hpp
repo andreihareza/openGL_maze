@@ -18,6 +18,8 @@ public:
     std::vector<std::pair<
         std::uint32_t, std::uint32_t>> getLongestPath();
 
+    bool canMove(std::pair<int, int> from, Direction dir);
+
 private:
 
     void createBorder();
@@ -36,8 +38,6 @@ private:
     void findLongestPath();
 
     std::pair<int, int> getStartPosition();
-
-    bool canMove(std::pair<int, int> from, Direction dir);
 
     bool isValidCoord(std::pair<int, int> position);
 

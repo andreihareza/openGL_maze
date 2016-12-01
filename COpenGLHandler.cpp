@@ -5,7 +5,9 @@
 
 COpenGLHandler * COpenGLHandler::stCurrentObject {nullptr};
 
-COpenGLHandler::COpenGLHandler(int argc, char ** argv)
+COpenGLHandler::COpenGLHandler(int argc, char ** argv, IOpenGLListener & listener)
+: mIsMoving{false}
+, mListener(listener)
 {
     std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
     /* Initialize open GL */
@@ -25,6 +27,8 @@ COpenGLHandler::COpenGLHandler(int argc, char ** argv)
 
     glClear(GL_COLOR_BUFFER_BIT);
     glutSwapBuffers();
+
+    glutIgnoreKeyRepeat(GLUT_KEY_REPEAT_ON);
 
     createShaders();
     setOpenGLCallbacks();
@@ -167,6 +171,9 @@ void COpenGLHandler::setOpenGLCallbacks()
 {
     std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
     glutDisplayFunc(COpenGLHandler::renderFunctionCallback);
+    glutSpecialFunc(COpenGLHandler::specialKeyFunctionCallback);
+    glutSpecialUpFunc(COpenGLHandler::specialKeyUpFunctionCallback);
+    glutIdleFunc(COpenGLHandler::idleFunctionCallback);
 }
 
 void COpenGLHandler::renderFunctionCallback()
@@ -174,9 +181,35 @@ void COpenGLHandler::renderFunctionCallback()
     stCurrentObject->renderFunction();
 }
 
+void COpenGLHandler::specialKeyFunctionCallback(int key, int x, int y)
+{
+    (void) x;
+    (void) y;
+
+    stCurrentObject->specialKeyFunction(key);
+}
+
+void COpenGLHandler::specialKeyUpFunctionCallback(int key, int x, int y)
+{
+    (void) x;
+    (void) y;
+
+    stCurrentObject->specialKeyUpFunction(key);
+}
+
+void COpenGLHandler::idleFunctionCallback()
+{
+    stCurrentObject->idleFunction();
+}
+
+void COpenGLHandler::timerFuncCallback(int value)
+{
+    stCurrentObject->timerFunc(value);
+}
+
 void COpenGLHandler::renderFunction()
 {
-    std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
 
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -188,10 +221,72 @@ void COpenGLHandler::renderFunction()
     glutSwapBuffers();
 }
 
-void COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
+void COpenGLHandler::specialKeyFunction(int key)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "(): key = " << key << std::endl;
+
+    switch(key)
+    {
+        case GLUT_KEY_UP:
+            mListener.upArrowPressed();
+            break;
+        case GLUT_KEY_DOWN:
+            mListener.downArrowPressed();
+            break;
+        case GLUT_KEY_LEFT:
+            mListener.leftArrowPressed();
+            break;
+        case GLUT_KEY_RIGHT:
+            mListener.rightArrowPressed();
+            break;
+        default:
+            break;
+    }
+}
+
+void COpenGLHandler::specialKeyUpFunction(int key)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "(): key = " << key << std::endl;
+
+    switch(key)
+    {
+        case GLUT_KEY_UP:
+            mListener.upArrowReleased();
+            break;
+        case GLUT_KEY_DOWN:
+            mListener.downArrowReleased();
+            break;
+        case GLUT_KEY_LEFT:
+            mListener.leftArrowReleased();
+            break;
+        case GLUT_KEY_RIGHT:
+            mListener.rightArrowReleased();
+            break;
+        default:
+            break;
+    }
+}
+
+void COpenGLHandler::idleFunction()
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    mListener.newFrame();
+}
+
+void COpenGLHandler::timerFunc(std::uint32_t functionId)
+{
+    mTimerFunctions[functionId]();
+    mTimerFunctions.erase(functionId);
+}
+
+std::uint32_t COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
         glm::vec4 color, float lineWidth)
 {
     // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    std::swap(firstPoint[0], firstPoint[1]);
+    std::swap(secondPoint[0], secondPoint[1]);
 
     std::uint32_t sizeBeforeAdd = mVboData.size();
 
@@ -212,11 +307,20 @@ void COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
     };
 
     mDrawFunctions.push_back(drawFunc);
+
+    return sizeBeforeAdd;
 }
-void COpenGLHandler::addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
+
+std::uint32_t COpenGLHandler::addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
         glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color)
 {
     // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    std::swap(firstPoint[0], firstPoint[1]);
+    std::swap(secondPoint[0], secondPoint[1]);
+    std::swap(thirdPoint[0], thirdPoint[1]);
+    std::swap(fourthPoint[0], fourthPoint[1]);
+
     std::uint32_t sizeBeforeAdd = mVboData.size();
 
     mVboData.push_back(firstPoint);
@@ -237,7 +341,81 @@ void COpenGLHandler::addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPo
     };
 
     mDrawFunctions.push_back(drawFunc);
+
+    return sizeBeforeAdd;
 }
+
+void COpenGLHandler::moveFilledRectangle(std::uint32_t startPos,
+            glm::vec4 firstPoint, glm::vec4 secondPoint,
+            glm::vec4 thirdPoint, glm::vec4 fourthPoint,
+            std::chrono::milliseconds time)
+{
+    mIsMoving = true;
+    std::swap(firstPoint[0], firstPoint[1]);
+    std::swap(secondPoint[0], secondPoint[1]);
+    std::swap(thirdPoint[0], thirdPoint[1]);
+    std::swap(fourthPoint[0], fourthPoint[1]);
+
+    smoothMoveFilledRectangle(startPos, firstPoint, secondPoint,
+            thirdPoint, fourthPoint, time);
+}
+
+void COpenGLHandler::smoothMoveFilledRectangle(std::uint32_t startPos,
+            glm::vec4 firstPoint, glm::vec4 secondPoint,
+            glm::vec4 thirdPoint, glm::vec4 fourthPoint,
+            std::chrono::milliseconds time)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "(): time = " << time.count() << std::endl;
+
+    if (time <= 0ms)
+    {
+        mVboData[startPos] = firstPoint;
+        mVboData[startPos+1] = secondPoint;
+        mVboData[startPos+2] = thirdPoint;
+        mVboData[startPos+3] = fourthPoint;
+        reDraw();
+        mIsMoving = false;
+    }
+    else
+    {
+        movePoint(mVboData[startPos],   firstPoint, time);
+        movePoint(mVboData[startPos+1], secondPoint, time);
+        movePoint(mVboData[startPos+2], thirdPoint, time);
+        movePoint(mVboData[startPos+3], fourthPoint, time);
+        reDraw();
+
+        std::uint32_t funcId = 0;
+
+        do
+        {
+            funcId = NUtility::generateRandomBetween(0u, NUtility::timerFuncNum);
+        }
+        while (mTimerFunctions.find(funcId) != mTimerFunctions.end());
+
+        mTimerFunctions[funcId] = std::bind(&COpenGLHandler::smoothMoveFilledRectangle,
+                this, startPos, firstPoint, secondPoint, thirdPoint, fourthPoint,
+                time-timeInFrame);
+
+        glutTimerFunc(timeInFrame.count(), timerFuncCallback, funcId);
+    }
+}
+
+void COpenGLHandler::movePoint(glm::vec4 & from, glm::vec4 to,
+        std::chrono::milliseconds time)
+{
+    std::uint32_t framesLeft = time / timeInFrame + 1;
+    float distanceX = to[0] - from[0];
+    float distanceY = to[1] - from[1];
+    float distanceToMoveX = distanceX / framesLeft;
+    float distanceToMoveY = distanceY / framesLeft;
+
+    // std::cout << "COpenGLHandler::" << __func__ << "(): " << distanceToMoveX << ' ' << distanceToMoveY << std::endl;
+
+    from[0] += distanceToMoveX;
+    from[1] += distanceToMoveY;
+}
+
+
 
 void COpenGLHandler::clearDrawData()
 {
@@ -249,7 +427,7 @@ void COpenGLHandler::clearDrawData()
 
 void COpenGLHandler::reDraw()
 {
-    std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
 
     /* Create buffer and set as active */
     glGenBuffers(1, &mVboId);
@@ -301,14 +479,7 @@ void COpenGLHandler::destroyShaders()
     glDeleteProgram(mDefaultShaderId);
 }
 
-
-
-
-
-
-
-
-
-
-
-
+bool COpenGLHandler::isMoving()
+{
+    return mIsMoving;
+}
