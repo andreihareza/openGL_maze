@@ -6,6 +6,8 @@ CGameHandler::CGameHandler(COpenGLHandler & openGLHandler)
 : mOpenGLHandler(openGLHandler)
 , mKeyPressed{0}
 , mLastMoveTime{0ms}
+, mPositiveItem{CDropItem::Type::Positive, *this}
+, mNegativeItem{CDropItem::Type::Negative, *this}
 {
     if ((NUtility::lines > 1) && (NUtility::columns > 1))
     {
@@ -15,6 +17,7 @@ CGameHandler::CGameHandler(COpenGLHandler & openGLHandler)
         mPlayer = {mPath[0].first, mPath[0].second};
 
         drawMaze();
+        mOpenGLHandler.reDraw();
     }
 }
 
@@ -24,8 +27,6 @@ void CGameHandler::drawMaze()
 
     requestDrawPath();
     requestDrawLines();
-
-    mOpenGLHandler.reDraw();
 }
 
 void CGameHandler::requestDrawLines()
@@ -42,7 +43,7 @@ void CGameHandler::requestDrawLines()
 
         glm::vec4 color {1.0, 0.55, 0.0, 1.0};
 
-        mOpenGLHandler.addLine(firstPoint, secondPoint, color, 2.0);
+        mOpenGLHandler.addLine(firstPoint, secondPoint, color, 2.0, false);
     }
 }
 
@@ -55,10 +56,10 @@ void CGameHandler::requestDrawPath()
     {
         for (std::uint32_t i=0; i<mPath.size(); ++i)
         {
-            std::pair<std::uint32_t, std::uint32_t> upCell = {mPath[i].first-1, mPath[i].second};
-            std::pair<std::uint32_t, std::uint32_t> downCell = {mPath[i].first+1, mPath[i].second};
-            std::pair<std::uint32_t, std::uint32_t> leftCell = {mPath[i].first, mPath[i].second-1};
-            std::pair<std::uint32_t, std::uint32_t> rightCell = {mPath[i].first, mPath[i].second+1};
+            NUtility::Position upCell = {mPath[i].first-1, mPath[i].second};
+            NUtility::Position downCell = {mPath[i].first+1, mPath[i].second};
+            NUtility::Position leftCell = {mPath[i].first, mPath[i].second-1};
+            NUtility::Position rightCell = {mPath[i].first, mPath[i].second+1};
 
             float upAdd = 0.0;
             float downAdd = 0.0;
@@ -94,7 +95,7 @@ void CGameHandler::requestDrawPath()
             glm::vec4 color {0.05, 0.05, 0.05, 1.0};
 
             mOpenGLHandler.addFilledRectangle(
-                    firstPoint, secondPoint, thirdPoint, fourthPoint, color);
+                    firstPoint, secondPoint, thirdPoint, fourthPoint, color, false);
         }
     }
 
@@ -130,10 +131,10 @@ void CGameHandler::drawEnd()
     /* ************************************ Last cell ************************************ */
     const std::uint32_t lst = mPath.size()-1;
 
-    std::pair<std::uint32_t, std::uint32_t> upCell = {mPath[lst].first-1, mPath[lst].second};
-    std::pair<std::uint32_t, std::uint32_t> downCell = {mPath[lst].first+1, mPath[lst].second};
-    std::pair<std::uint32_t, std::uint32_t> leftCell = {mPath[lst].first, mPath[lst].second-1};
-    std::pair<std::uint32_t, std::uint32_t> rightCell = {mPath[lst].first, mPath[lst].second+1};
+    NUtility::Position upCell = {mPath[lst].first-1, mPath[lst].second};
+    NUtility::Position downCell = {mPath[lst].first+1, mPath[lst].second};
+    NUtility::Position leftCell = {mPath[lst].first, mPath[lst].second-1};
+    NUtility::Position rightCell = {mPath[lst].first, mPath[lst].second+1};
     float upAdd = (mPath[lst-1] == upCell)? 0.0 : 0.05;
     float downAdd = (mPath[lst-1] == downCell)? 0.0 : -0.05;
     float leftAdd = (mPath[lst-1] == leftCell)? 0.0 : 0.05;
@@ -204,9 +205,18 @@ void CGameHandler::newFrame()
 {
     // std::cout << "CGameHandler::" << __func__ << "()" << std::endl;
 
+    tryMove();
+    trySpawnPositive();
+    trySpawnNegative();
+    tryEndSpeedUp();
+}
+
+void CGameHandler::tryMove()
+{
+
     std::chrono::milliseconds currentTime = NUtility::getCurrentTime();
 
-    if ((currentTime - mLastMoveTime > NUtility::moveDuration) &&  (mOpenGLHandler.isMoving() == false))
+    if ((currentTime - mLastMoveTime > mMoveDuration) &&  (mOpenGLHandler.isMoving() == false))
     {
         // std::cout << "CGameHandler::" << __func__ << "(): mKeyPressed = " << mKeyPressed << std::endl;
         // std::cout << "CGameHandler::" << __func__ << "(): mPlayer = (" << mPlayer.first << " " << mPlayer.second << ")" << std::endl;
@@ -261,6 +271,31 @@ void CGameHandler::movePlayer(CPlayer & player, Direction direction)
 
     player.move(direction);
 
+    if (&player == &mPlayer)
+    {
+        NUtility::Position playerPosition =
+            static_cast<NUtility::Position>(player);
+
+        if (mPositiveItem.exists() && (playerPosition == mPositiveItem.getPosition()))
+        {
+            mPositiveItem.pick();
+            mOpenGLHandler.removeFilledRectangle(mPositiveItemId);
+            mPositiveItemId = 0u;
+        }
+
+        if (mNegativeItem.exists() && (playerPosition == mNegativeItem.getPosition()))
+        {
+            mNegativeItem.pick();
+            mOpenGLHandler.removeFilledRectangle(mNegativeItemId);
+            mNegativeItemId = 0u;
+        }
+    }
+
+    requestMovePlayer();
+}
+
+void CGameHandler::requestMovePlayer()
+{
     float upAdd = 0.05;
     float downAdd = -0.05;
     float leftAdd = 0.05;
@@ -272,9 +307,73 @@ void CGameHandler::movePlayer(CPlayer & player, Direction direction)
     glm::vec4 fourthPoint {mPlayer.first+1+downAdd, mPlayer.second+1+rightAdd, 0.0, 1.0};
 
     mOpenGLHandler.moveFilledRectangle(mPlayerId,
-            firstPoint, secondPoint, thirdPoint, fourthPoint, NUtility::moveDuration);
-
-    mOpenGLHandler.reDraw();
+            firstPoint, secondPoint, thirdPoint, fourthPoint, mMoveDuration);
 }
 
+void CGameHandler::trySpawnPositive()
+{
+    if (mPositiveItem.canAppear() == true)
+    {
+        mPositiveItem.appear(
+                static_cast<std::pair<uint32_t, uint32_t>>(mPlayer), mPath,
+                0, NUtility::lines-1, 0, NUtility::columns-1);
+
+        NUtility::Position itemPosition = mPositiveItem.getPosition();
+
+        glm::vec4 firstPoint {itemPosition.first + 0.25f, itemPosition.second + 0.25f, 0.0f, 1.0f};
+        glm::vec4 secondPoint {itemPosition.first + 0.75f, itemPosition.second + 0.25f, 0.0f, 1.0f};
+        glm::vec4 thirdPoint {itemPosition.first + 0.25f, itemPosition.second + 0.75f, 0.0f, 1.0f};
+        glm::vec4 fourthPoint {itemPosition.first + 0.75f, itemPosition.second + 0.75f, 0.0f, 1.0f};
+        glm::vec4 color = {1.0f, 0.5f, 0.0f, 0.0f};
+
+        mPositiveItemId = mOpenGLHandler.addFilledRectangle(
+                firstPoint, secondPoint, thirdPoint, fourthPoint, color);
+    }
+}
+
+void CGameHandler::trySpawnNegative()
+{
+    if (mNegativeItem.canAppear() == true)
+    {
+        mNegativeItem.appear(
+                static_cast<std::pair<uint32_t, uint32_t>>(mPlayer), mPath,
+                0, NUtility::lines-1, 0, NUtility::columns-1);
+
+        NUtility::Position itemPosition = mNegativeItem.getPosition();
+
+        glm::vec4 firstPoint {itemPosition.first + 0.25f, itemPosition.second + 0.25f, 0.0f, 1.0f};
+        glm::vec4 secondPoint {itemPosition.first + 0.75f, itemPosition.second + 0.25f, 0.0f, 1.0f};
+        glm::vec4 thirdPoint {itemPosition.first + 0.25f, itemPosition.second + 0.75f, 0.0f, 1.0f};
+        glm::vec4 fourthPoint {itemPosition.first + 0.75f, itemPosition.second + 0.75f, 0.0f, 1.0f};
+        glm::vec4 color = {0.53f, 0.12f, 0.47f, 0.0f};
+
+        mNegativeItemId = mOpenGLHandler.addFilledRectangle(
+                firstPoint, secondPoint, thirdPoint, fourthPoint, color);
+    }
+}
+
+void CGameHandler::tryEndSpeedUp()
+{
+    if (mSpeedUpActive &&
+       (NUtility::getCurrentTime() - speedUpEffectDuration > mSpeedUpTime))
+    {
+        std::cout << "CGameHandler::" << __func__ << "(): ended" << std::endl;
+        mMoveDuration = defaultMoveDuration;
+        mSpeedUpActive = false;
+    }
+}
+
+void CGameHandler::rotateEffectPicked()
+{
+    std::cout << "CGameHandler::" << __func__ << "()" << std::endl;
+}
+
+void CGameHandler::speedUpEffectPicked()
+{
+    std::cout << "CGameHandler::" << __func__ << "()" << std::endl;
+    mMoveDuration = speedUpMoveDuration;
+
+    mSpeedUpActive = true;
+    mSpeedUpTime = NUtility::getCurrentTime();
+}
 

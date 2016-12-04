@@ -1,7 +1,9 @@
-#include "COpenGLHandler.hpp"
-#include "utility.hpp"
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+
+#include "COpenGLHandler.hpp"
+#include "utility.hpp"
 
 COpenGLHandler * COpenGLHandler::stCurrentObject {nullptr};
 
@@ -281,7 +283,7 @@ void COpenGLHandler::timerFunc(std::uint32_t functionId)
 }
 
 std::uint32_t COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
-        glm::vec4 color, float lineWidth)
+        glm::vec4 color, float lineWidth, bool reDraw)
 {
     // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
 
@@ -308,11 +310,29 @@ std::uint32_t COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoin
 
     mDrawFunctions.push_back(drawFunc);
 
-    return sizeBeforeAdd;
+    if (reDraw == true)
+    {
+        this->reDraw();
+    }
+
+    std::uint32_t figureId = 0u;
+
+    if (mAvailableIds.empty() == true)
+    {
+        figureId = ++mNextAvailableId;
+    }
+    else
+    {
+        figureId = mAvailableIds.front();
+        mAvailableIds.pop_front();
+    }
+    mExternalId[figureId] = {sizeBeforeAdd, mDrawFunctions.size()-1};
+
+    return figureId;
 }
 
 std::uint32_t COpenGLHandler::addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
-        glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color)
+        glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color, bool reDraw)
 {
     // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
 
@@ -342,10 +362,28 @@ std::uint32_t COpenGLHandler::addFilledRectangle(glm::vec4 firstPoint, glm::vec4
 
     mDrawFunctions.push_back(drawFunc);
 
-    return sizeBeforeAdd;
+    if (reDraw == true)
+    {
+        this->reDraw();
+    }
+
+    std::uint32_t figureId = 0u;
+
+    if (mAvailableIds.empty() == true)
+    {
+        figureId = ++mNextAvailableId;
+    }
+    else
+    {
+        figureId = mAvailableIds.front();
+        mAvailableIds.pop_front();
+    }
+    mExternalId[figureId] = {sizeBeforeAdd, mDrawFunctions.size()-1};
+
+    return figureId;
 }
 
-void COpenGLHandler::moveFilledRectangle(std::uint32_t startPos,
+void COpenGLHandler::moveFilledRectangle(std::uint32_t figureId,
             glm::vec4 firstPoint, glm::vec4 secondPoint,
             glm::vec4 thirdPoint, glm::vec4 fourthPoint,
             std::chrono::milliseconds time)
@@ -356,7 +394,7 @@ void COpenGLHandler::moveFilledRectangle(std::uint32_t startPos,
     std::swap(thirdPoint[0], thirdPoint[1]);
     std::swap(fourthPoint[0], fourthPoint[1]);
 
-    smoothMoveFilledRectangle(startPos, firstPoint, secondPoint,
+    smoothMoveFilledRectangle(mExternalId[figureId].first, firstPoint, secondPoint,
             thirdPoint, fourthPoint, time);
 }
 
@@ -415,7 +453,37 @@ void COpenGLHandler::movePoint(glm::vec4 & from, glm::vec4 to,
     from[1] += distanceToMoveY;
 }
 
+void COpenGLHandler::removeFilledRectangle(std::uint32_t figureId, bool reDraw)
+{
+    std::cout << "COpenGLHandler::" << __func__ << "(): figureId = " << figureId << std::endl;
+    std::uint32_t startPos = mExternalId[figureId].first;
+    std::uint32_t functionPos = mExternalId[figureId].first;
 
+    mVboData.erase(mVboData.begin()+startPos, mVboData.begin()+startPos+4);
+    mColorData.erase(mColorData.begin()+startPos, mColorData.begin()+startPos+4);
+    mDrawFunctions.erase(mDrawFunctions.begin()+functionPos);
+
+    mExternalId.erase(figureId);
+
+    for (auto & id : mExternalId)
+    {
+        if (id.second.first > startPos)
+        {
+            id.second.first -= 4;
+        }
+        if (id.second.second > functionPos)
+        {
+            --id.second.second;
+        }
+    }
+
+    mAvailableIds.push_back(figureId);
+
+    if (reDraw == true)
+    {
+        this->reDraw();
+    }
+}
 
 void COpenGLHandler::clearDrawData()
 {
@@ -423,6 +491,7 @@ void COpenGLHandler::clearDrawData()
 
     mVboData.clear();
     mDrawFunctions.clear();
+    mExternalId.clear();
 }
 
 void COpenGLHandler::reDraw()
@@ -483,3 +552,4 @@ bool COpenGLHandler::isMoving()
 {
     return mIsMoving;
 }
+

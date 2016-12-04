@@ -10,8 +10,8 @@ public:
 
     CPlayer();
 
-    void operator=(std::pair<std::uint32_t, std::uint32_t> position);
-    explicit operator std::pair<std::uint32_t, std::uint32_t> () const;
+    void operator=(NUtility::Position position);
+    explicit operator NUtility::Position () const;
 
     void move(Direction direction);
 
@@ -19,6 +19,6 @@ public:
     const std::uint32_t & second;
 
 private:
-    std::pair<std::uint32_t, std::uint32_t> mPosition;
+    NUtility::Position mPosition;
 };
 

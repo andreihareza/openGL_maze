@@ -3,6 +3,7 @@
 #include <functional>
 #include <chrono>
 #include <unordered_map>
+#include <deque>
 
 #include "IOpenGLListener.hpp"
 #include "utility.hpp"
@@ -25,15 +26,20 @@ public:
     void init();
 
     std::uint32_t addLine(glm::vec4 firstPoint, glm::vec4 secondPoint,
-            glm::vec4 color, float lineWidth);
+            glm::vec4 color, float lineWidth,
+            bool reDraw = true);
 
     std::uint32_t addFilledRectangle(glm::vec4 firstPoint, glm::vec4 secondPoint,
-            glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color);
+            glm::vec4 thirdPoint, glm::vec4 fourthPoint, glm::vec4 color,
+            bool reDraw = true);
 
-    void moveFilledRectangle(std::uint32_t startPos,
+    void moveFilledRectangle(std::uint32_t figureId,
             glm::vec4 firstPoint, glm::vec4 secondPoint,
             glm::vec4 thirdPoint, glm::vec4 fourthPoint,
             std::chrono::milliseconds time = 0ms);
+
+    void removeFilledRectangle(std::uint32_t figureId,
+            bool reDraw = true);
 
     void clearDrawData();
     void reDraw();
@@ -109,5 +115,9 @@ private:
     IOpenGLListener & mListener;
 
     static const constexpr std::chrono::milliseconds timeInFrame = 17ms;
+
+    std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>> mExternalId;
+    std::uint32_t mNextAvailableId = 0u;
+    std::deque<std::uint32_t> mAvailableIds;
 };
 

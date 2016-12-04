@@ -117,7 +117,7 @@ std::pair<int, int> CMaze::getStartPosition()
     return last;
 }
 
-std::vector<std::pair<std::uint32_t, std::uint32_t>> CMaze::getLongestPath()
+std::vector<NUtility::Position> CMaze::getLongestPath()
 {
     std::cout << "CMaze::" << __func__ << "()" << std::endl;
     return mLongestPath;

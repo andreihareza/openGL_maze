@@ -6,12 +6,12 @@ CPlayer::CPlayer()
 {
 }
 
-void CPlayer::operator=(std::pair<std::uint32_t, std::uint32_t> position)
+void CPlayer::operator=(NUtility::Position position)
 {
     mPosition = position;
 }
 
-CPlayer::operator std::pair<std::uint32_t, std::uint32_t> () const
+CPlayer::operator NUtility::Position () const
 {
     return mPosition;
 }

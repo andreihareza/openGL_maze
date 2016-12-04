@@ -7,12 +7,14 @@ using namespace std::chrono_literals;
 
 namespace NUtility
 {
+    using Position = std::pair<std::uint32_t, std::uint32_t>;
+
     const std::uint32_t lines = 10;
     const std::uint32_t columns = 10;
 
-    const constexpr std::chrono::milliseconds moveDuration = 300ms;
-
     const std::uint32_t timerFuncNum = 1000u;
+
+    const constexpr std::chrono::milliseconds effectCooldown = 30000ms;
 
     const std::uint32_t width = 600;
     const std::uint32_t height = 600;
@@ -41,9 +43,10 @@ enum class Direction : std::uint32_t
     Size,
 };
 
-constexpr std::underlying_type<Direction>::type toInt(Direction e)
+template<class ENUM>
+constexpr std::underlying_type<Direction>::type toInt(ENUM e)
 {
-    return static_cast<std::underlying_type<Direction>::type>(e);
+    return static_cast<typename std::underlying_type<ENUM>::type>(e);
 }
 
 constexpr const char * toString(Direction e)
