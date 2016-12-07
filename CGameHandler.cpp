@@ -209,6 +209,7 @@ void CGameHandler::newFrame()
     trySpawnPositive();
     trySpawnNegative();
     tryEndSpeedUp();
+    tryEndRotate();
 }
 
 void CGameHandler::tryMove()
@@ -360,12 +361,31 @@ void CGameHandler::tryEndSpeedUp()
         std::cout << "CGameHandler::" << __func__ << "(): ended" << std::endl;
         mMoveDuration = defaultMoveDuration;
         mSpeedUpActive = false;
+
+        mOpenGLHandler.stopSpin(mPlayerId);
+    }
+}
+
+void CGameHandler::tryEndRotate()
+{
+    if (mRotationActive &&
+       (NUtility::getCurrentTime() - rotationEffectDuration > mRotationTime))
+    {
+        std::cout << "CGameHandler::" << __func__ << "(): ended" << std::endl;
+        mRotationActive = false;
+
+        mOpenGLHandler.stopRotate(2000ms);
     }
 }
 
 void CGameHandler::rotateEffectPicked()
 {
     std::cout << "CGameHandler::" << __func__ << "()" << std::endl;
+    mOpenGLHandler.rotateScreen(2000ms, 90.0f);
+
+    mRotationActive = true;
+    mRotationTime = NUtility::getCurrentTime();
+
 }
 
 void CGameHandler::speedUpEffectPicked()
@@ -375,5 +395,7 @@ void CGameHandler::speedUpEffectPicked()
 
     mSpeedUpActive = true;
     mSpeedUpTime = NUtility::getCurrentTime();
+
+    mOpenGLHandler.spin(mPlayerId);
 }
 

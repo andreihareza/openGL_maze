@@ -44,6 +44,12 @@ public:
     void clearDrawData();
     void reDraw();
 
+    void spin(std::uint32_t figureId);
+    void stopSpin(std::uint32_t figureId);
+
+    void rotateScreen(std::chrono::milliseconds time, float angle);
+    void stopRotate(std::chrono::milliseconds time);
+
     bool isMoving();
 
 private:
@@ -77,6 +83,8 @@ private:
     std::uint32_t mObserverMatrixLocation;
     std::uint32_t mTransformMatrixLocation;
     std::uint32_t mProjectionMatrixLocation;
+
+    glm::mat4 mCurrentTransformMatrix;
     /* ************************ Shaders ************************ */
 
     /* *********************** Callbacks *********************** */
@@ -119,5 +127,27 @@ private:
     std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>> mExternalId;
     std::uint32_t mNextAvailableId = 0u;
     std::deque<std::uint32_t> mAvailableIds;
+
+    /* ************************** Spin ************************* */
+    glm::mat4 getSpinMatrix(glm::vec4 center, float angle);
+    void updateSpinAngle(std::uint32_t start);
+
+    std::unordered_map<std::uint32_t, bool> mIsSpinning;
+    std::unordered_map<std::uint32_t, float> mSpinningAngle;
+
+    /* ************************** Spin ************************* */
+
+    /* ************************* Rotate ************************ */
+    void smoothRotateScreen(
+            std::chrono::milliseconds timeLeft, float remaningAngle);
+    void smoothStopRotate(
+            std::chrono::milliseconds timeLeft, float remaningAngle);
+
+    glm::mat4 getRotateMatrix(glm::vec3 center, float angle);
+
+    bool mIsRotating;
+    float mRotationAngle;
+    glm::vec3 mCenter;
+    /* ************************* Rotate ************************ */
 };
 

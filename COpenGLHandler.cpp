@@ -62,6 +62,13 @@ void COpenGLHandler::createShaders()
 
     mDefaultTransformMatrix = glm::mat4();
 
+    mCenter = glm::vec3
+    {
+        static_cast<float>(NUtility::columns)/2,
+        static_cast<float>(NUtility::lines)/2,
+        0.0f
+    };
+
     mDefaultShaderId = loadShaders("shader.vert", "shader.frag");
 
     useShader(mDefaultShaderId);
@@ -165,6 +172,7 @@ void COpenGLHandler::useShader(std::uint32_t shaderId, bool sendData)
     {
         glUniformMatrix4fv(mObserverMatrixLocation, 1, false, &mDefaultObserverMatrix[0][0]);
         glUniformMatrix4fv(mTransformMatrixLocation, 1, false, &mDefaultTransformMatrix[0][0]);
+        mCurrentTransformMatrix = mDefaultTransformMatrix;
         glUniformMatrix4fv(mProjectionMatrixLocation, 1, false, &mDefaultProjectionMatrix[0][0]);
     }
 }
@@ -305,6 +313,29 @@ std::uint32_t COpenGLHandler::addLine(glm::vec4 firstPoint, glm::vec4 secondPoin
             mCurrentLineWidth = lineWidth;
             glLineWidth(lineWidth);
         }
+
+        glm::mat4 transformMatrix = mDefaultTransformMatrix;
+        if (mIsSpinning.find(start) != mIsSpinning.end())
+        {
+            glm::vec4 spinCenter = (mVboData[start] + mVboData[start+1] +
+                mVboData[start+2] + mVboData[start+3]) / 4.0f;
+
+            transformMatrix =
+                getSpinMatrix(spinCenter, mSpinningAngle[start]) * transformMatrix;
+        }
+
+        if (mIsRotating == true)
+        {
+            transformMatrix =
+                getRotateMatrix(mCenter, mRotationAngle) * transformMatrix;
+        }
+
+        if (transformMatrix != mCurrentTransformMatrix)
+        {
+            glUniformMatrix4fv(mTransformMatrixLocation, 1, false, &transformMatrix[0][0]);
+            mCurrentTransformMatrix = transformMatrix;
+        }
+
         glDrawArrays(GL_LINES, start, 2);
     };
 
@@ -355,8 +386,29 @@ std::uint32_t COpenGLHandler::addFilledRectangle(glm::vec4 firstPoint, glm::vec4
     mVboData.push_back(fourthPoint);
     mColorData.push_back(color);
 
-    std::function<void()> drawFunc = [start = sizeBeforeAdd]()
+    std::function<void()> drawFunc = [start = sizeBeforeAdd, this]()
     {
+        glm::mat4 transformMatrix = mDefaultTransformMatrix;
+        if (mIsSpinning.find(start) != mIsSpinning.end())
+        {
+            glm::vec4 spinCenter = (mVboData[start] + mVboData[start+1] +
+                mVboData[start+2] + mVboData[start+3]) / 4.0f;
+
+            transformMatrix =
+                getSpinMatrix(spinCenter, mSpinningAngle[start]) * transformMatrix;
+        }
+
+        if (mIsRotating == true)
+        {
+            transformMatrix =
+                getRotateMatrix(mCenter, mRotationAngle) * transformMatrix;
+        }
+
+        if (transformMatrix != mCurrentTransformMatrix)
+        {
+            glUniformMatrix4fv(mTransformMatrixLocation, 1, false, &transformMatrix[0][0]);
+            mCurrentTransformMatrix = transformMatrix;
+        }
         glDrawArrays(GL_TRIANGLE_STRIP, start, 4);
     };
 
@@ -552,4 +604,146 @@ bool COpenGLHandler::isMoving()
 {
     return mIsMoving;
 }
+
+void COpenGLHandler::spin(std::uint32_t figureId)
+{
+    mIsSpinning[mExternalId[figureId].first] = true;
+    updateSpinAngle(mExternalId[figureId].first);
+}
+
+void COpenGLHandler::stopSpin(std::uint32_t figureId)
+{
+    mIsSpinning.erase(mExternalId[figureId].first);
+    mSpinningAngle.erase(mExternalId[figureId].first);
+    reDraw();
+}
+
+void COpenGLHandler::updateSpinAngle(std::uint32_t start)
+{
+    if (mIsSpinning.find(start) != mIsSpinning.end())
+    {
+        mSpinningAngle[start] += 10;
+        reDraw();
+
+        std::uint32_t funcId = 0;
+        do
+        {
+            funcId = NUtility::generateRandomBetween(0u, NUtility::timerFuncNum);
+        }
+        while (mTimerFunctions.find(funcId) != mTimerFunctions.end());
+
+        mTimerFunctions[funcId] = std::bind(&COpenGLHandler::updateSpinAngle,
+                this, start);
+
+        glutTimerFunc(timeInFrame.count(), timerFuncCallback, funcId);
+    }
+}
+
+glm::mat4 COpenGLHandler::getSpinMatrix(glm::vec4 center, float angle)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    glm::mat4 rotationMatrix;
+    glm::vec3 spinCenter = {center[0], center[1], center[2]};
+
+    rotationMatrix = glm::translate(rotationMatrix, spinCenter);
+
+    rotationMatrix = glm::rotate(rotationMatrix, glm::radians(angle),
+            glm::vec3{{0.0f, 0.0f, 1.0f}});
+
+    rotationMatrix = glm::translate(rotationMatrix, -spinCenter);
+
+    return rotationMatrix;
+}
+
+void COpenGLHandler::rotateScreen(std::chrono::milliseconds time, float angle)
+{
+    mIsRotating = true;
+    smoothRotateScreen(time, angle);
+}
+
+void COpenGLHandler::stopRotate(std::chrono::milliseconds time)
+{
+    smoothStopRotate(time, mRotationAngle);
+}
+
+void COpenGLHandler::smoothRotateScreen(
+        std::chrono::milliseconds remaningTime, float angle)
+{
+    if (remaningTime > 0ms)
+    {
+        std::uint32_t framesLeft = remaningTime / timeInFrame + 1;
+        float moveAngle = angle / framesLeft;
+
+        mRotationAngle += moveAngle;
+
+        std::uint32_t funcId = 0u;
+
+        do
+        {
+            funcId = NUtility::generateRandomBetween(0u, NUtility::timerFuncNum);
+        }
+        while (mTimerFunctions.find(funcId) != mTimerFunctions.end());
+
+        mTimerFunctions[funcId] = std::bind(&COpenGLHandler::smoothRotateScreen,
+                this, remaningTime - timeInFrame, angle - moveAngle);
+
+        glutTimerFunc(timeInFrame.count(), timerFuncCallback, funcId);
+    }
+    else
+    {
+        mRotationAngle += angle;
+    }
+    reDraw();
+}
+
+void COpenGLHandler::smoothStopRotate(
+        std::chrono::milliseconds remaningTime, float angle)
+{
+    if (remaningTime > 0ms)
+    {
+        std::uint32_t framesLeft = remaningTime / timeInFrame + 1;
+        float moveAngle = angle / framesLeft;
+
+        mRotationAngle -= moveAngle;
+
+        std::uint32_t funcId = 0u;
+
+        do
+        {
+            funcId = NUtility::generateRandomBetween(0u, NUtility::timerFuncNum);
+        }
+        while (mTimerFunctions.find(funcId) != mTimerFunctions.end());
+
+        mTimerFunctions[funcId] = std::bind(&COpenGLHandler::smoothStopRotate,
+                this, remaningTime - timeInFrame, angle - moveAngle);
+
+        glutTimerFunc(timeInFrame.count(), timerFuncCallback, funcId);
+    }
+    else
+    {
+        mRotationAngle -= angle;
+        mIsRotating = false;
+    }
+    reDraw();
+}
+
+glm::mat4 COpenGLHandler::getRotateMatrix(glm::vec3 center, float angle)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    glm::mat4 rotationMatrix;
+
+    rotationMatrix = glm::translate(rotationMatrix, center);
+
+    rotationMatrix = glm::rotate(rotationMatrix, glm::radians(angle),
+            glm::vec3{{0.0f, 0.0f, 1.0f}});
+
+    rotationMatrix = glm::translate(rotationMatrix, -center);
+
+    return rotationMatrix;
+}
+
+
+
 

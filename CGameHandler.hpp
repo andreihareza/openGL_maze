@@ -47,6 +47,7 @@ private:
     void trySpawnPositive();
     void trySpawnNegative();
     void tryEndSpeedUp();
+    void tryEndRotate();
 
 
     COpenGLHandler & mOpenGLHandler;
@@ -67,15 +68,23 @@ private:
     std::uint32_t mNegativeItemId;
 
     static const constexpr std::chrono::milliseconds
-        defaultMoveDuration = 300ms;
+        defaultMoveDuration = 200ms;
     static const constexpr std::chrono::milliseconds
-        speedUpMoveDuration = 200ms;
-    static const constexpr std::chrono::milliseconds
-        speedUpEffectDuration = 8000ms;
+        speedUpMoveDuration = 140ms;
 
     std::chrono::milliseconds mMoveDuration = defaultMoveDuration;
 
+    static const constexpr std::chrono::milliseconds
+        speedUpEffectDuration = 8000ms;
+
+    static const constexpr std::chrono::milliseconds
+        rotationEffectDuration = 8000ms;
+
+
     bool mSpeedUpActive = false;
     std::chrono::milliseconds mSpeedUpTime = 0ms;
+
+    bool mRotationActive = false;
+    std::chrono::milliseconds mRotationTime = 0ms;
 };
 

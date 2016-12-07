@@ -15,8 +15,8 @@ out vec4 ex_Color;
 
 void main(void)
 {
-    gl_Position = projectionMatrix * observerMatrix * in_Position;
-    // gl_Position = projectionMatrix * observerMatrix * transformMatrix * in_Position;
+    // gl_Position = projectionMatrix * observerMatrix * in_Position;
+    gl_Position = projectionMatrix * observerMatrix * transformMatrix * in_Position;
     // gl_Position = in_Position;
     ex_Color = in_Color;
 }
