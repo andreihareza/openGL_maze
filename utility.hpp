@@ -14,7 +14,11 @@ namespace NUtility
 
     const std::uint32_t timerFuncNum = 1000u;
 
-    const constexpr std::chrono::milliseconds effectCooldown = 30000ms;
+    const constexpr std::chrono::milliseconds effectCooldown = 15000ms;
+
+    const constexpr std::chrono::milliseconds defaultMoveDuration = 200ms;
+    const constexpr std::chrono::milliseconds speedUpMoveDuration = 140ms;
+    const constexpr std::chrono::milliseconds restartDuration = 2000ms;
 
     const std::uint32_t width = 600;
     const std::uint32_t height = 600;

@@ -5,7 +5,6 @@
 CGameHandler::CGameHandler(COpenGLHandler & openGLHandler)
 : mOpenGLHandler(openGLHandler)
 , mKeyPressed{0}
-, mLastMoveTime{0ms}
 , mPositiveItem{CDropItem::Type::Positive, *this}
 , mNegativeItem{CDropItem::Type::Negative, *this}
 {
@@ -14,7 +13,10 @@ CGameHandler::CGameHandler(COpenGLHandler & openGLHandler)
         mMaze.generateMaze(0, NUtility::lines, 0, NUtility::columns);
 
         mPath = mMaze.getLongestPath();
-        mPlayer = {mPath[0].first, mPath[0].second};
+        mStart = {mPath[0].first, mPath[0].second};
+        mFinish = mPath.back();
+
+        mPlayer = mStart;
 
         drawMaze();
         mOpenGLHandler.reDraw();
@@ -210,6 +212,7 @@ void CGameHandler::newFrame()
     trySpawnNegative();
     tryEndSpeedUp();
     tryEndRotate();
+    tryEndZoom();
 }
 
 void CGameHandler::tryMove()
@@ -217,44 +220,54 @@ void CGameHandler::tryMove()
 
     std::chrono::milliseconds currentTime = NUtility::getCurrentTime();
 
-    if ((currentTime - mLastMoveTime > mMoveDuration) &&  (mOpenGLHandler.isMoving() == false))
+    if ((currentTime > mNextMoveTime) &&  (mOpenGLHandler.isMoving() == false))
     {
         // std::cout << "CGameHandler::" << __func__ << "(): mKeyPressed = " << mKeyPressed << std::endl;
         // std::cout << "CGameHandler::" << __func__ << "(): mPlayer = (" << mPlayer.first << " " << mPlayer.second << ")" << std::endl;
 
-        if (mKeyPressed == (1 << toInt(Direction::Up)))
+        if (mGameFinished)
         {
-            if (canMovePlayer(mPlayer, Direction::Up) == true)
-            {
-                movePlayer(mPlayer, Direction::Up);
-                mLastMoveTime = currentTime;
-            }
-        }
+            forceMovePlayer(mPlayer, mStart);
+            mNextMoveTime = currentTime + NUtility::restartDuration;
 
-        if (mKeyPressed == (1 << toInt(Direction::Down)))
-        {
-            if (canMovePlayer(mPlayer, Direction::Down) == true)
-            {
-                movePlayer(mPlayer, Direction::Down);
-                mLastMoveTime = currentTime;
-            }
+            mGameFinished = false;
         }
-
-        if (mKeyPressed == (1 << toInt(Direction::Left)))
+        else
         {
-            if (canMovePlayer(mPlayer, Direction::Left) == true)
+            if (mKeyPressed == (1 << toInt(Direction::Up)))
             {
-                movePlayer(mPlayer, Direction::Left);
-                mLastMoveTime = currentTime;
+                if (canMovePlayer(mPlayer, Direction::Up) == true)
+                {
+                    movePlayer(mPlayer, Direction::Up);
+                    mNextMoveTime = currentTime + mMoveDuration;
+                }
             }
-        }
 
-        if (mKeyPressed == (1 << toInt(Direction::Right)))
-        {
-            if (canMovePlayer(mPlayer, Direction::Right) == true)
+            if (mKeyPressed == (1 << toInt(Direction::Down)))
             {
-                movePlayer(mPlayer, Direction::Right);
-                mLastMoveTime = currentTime;
+                if (canMovePlayer(mPlayer, Direction::Down) == true)
+                {
+                    movePlayer(mPlayer, Direction::Down);
+                    mNextMoveTime = currentTime + mMoveDuration;
+                }
+            }
+
+            if (mKeyPressed == (1 << toInt(Direction::Left)))
+            {
+                if (canMovePlayer(mPlayer, Direction::Left) == true)
+                {
+                    movePlayer(mPlayer, Direction::Left);
+                    mNextMoveTime = currentTime + mMoveDuration;
+                }
+            }
+
+            if (mKeyPressed == (1 << toInt(Direction::Right)))
+            {
+                if (canMovePlayer(mPlayer, Direction::Right) == true)
+                {
+                    movePlayer(mPlayer, Direction::Right);
+                    mNextMoveTime = currentTime + mMoveDuration;
+                }
             }
         }
     }
@@ -290,12 +303,41 @@ void CGameHandler::movePlayer(CPlayer & player, Direction direction)
             mOpenGLHandler.removeFilledRectangle(mNegativeItemId);
             mNegativeItemId = 0u;
         }
-    }
 
-    requestMovePlayer();
+        requestMovePlayer(mMoveDuration);
+    }
 }
 
-void CGameHandler::requestMovePlayer()
+void CGameHandler::forceMovePlayer(CPlayer & player, NUtility::Position to)
+{
+    std::cout << "CGameHandler::" << __func__ << "(): direction = (" << to.first << ", " << to.second << ")" << std::endl;
+
+    player.move(to);
+
+    if (&player == &mPlayer)
+    {
+        NUtility::Position playerPosition =
+            static_cast<NUtility::Position>(player);
+
+        if (mPositiveItem.exists() && (playerPosition == mPositiveItem.getPosition()))
+        {
+            mPositiveItem.pick();
+            mOpenGLHandler.removeFilledRectangle(mPositiveItemId);
+            mPositiveItemId = 0u;
+        }
+
+        if (mNegativeItem.exists() && (playerPosition == mNegativeItem.getPosition()))
+        {
+            mNegativeItem.pick();
+            mOpenGLHandler.removeFilledRectangle(mNegativeItemId);
+            mNegativeItemId = 0u;
+        }
+
+        requestMovePlayer(NUtility::restartDuration);
+    }
+}
+
+void CGameHandler::requestMovePlayer(std::chrono::milliseconds moveDuration)
 {
     float upAdd = 0.05;
     float downAdd = -0.05;
@@ -308,7 +350,12 @@ void CGameHandler::requestMovePlayer()
     glm::vec4 fourthPoint {mPlayer.first+1+downAdd, mPlayer.second+1+rightAdd, 0.0, 1.0};
 
     mOpenGLHandler.moveFilledRectangle(mPlayerId,
-            firstPoint, secondPoint, thirdPoint, fourthPoint, mMoveDuration);
+            firstPoint, secondPoint, thirdPoint, fourthPoint, moveDuration);
+
+    if (static_cast<NUtility::Position>(mPlayer) == mFinish)
+    {
+        mGameFinished = true;
+    }
 }
 
 void CGameHandler::trySpawnPositive()
@@ -325,7 +372,8 @@ void CGameHandler::trySpawnPositive()
         glm::vec4 secondPoint {itemPosition.first + 0.75f, itemPosition.second + 0.25f, 0.0f, 1.0f};
         glm::vec4 thirdPoint {itemPosition.first + 0.25f, itemPosition.second + 0.75f, 0.0f, 1.0f};
         glm::vec4 fourthPoint {itemPosition.first + 0.75f, itemPosition.second + 0.75f, 0.0f, 1.0f};
-        glm::vec4 color = {1.0f, 0.5f, 0.0f, 0.0f};
+
+        glm::vec4 color = mPositiveItem.getColor();
 
         mPositiveItemId = mOpenGLHandler.addFilledRectangle(
                 firstPoint, secondPoint, thirdPoint, fourthPoint, color);
@@ -346,7 +394,7 @@ void CGameHandler::trySpawnNegative()
         glm::vec4 secondPoint {itemPosition.first + 0.75f, itemPosition.second + 0.25f, 0.0f, 1.0f};
         glm::vec4 thirdPoint {itemPosition.first + 0.25f, itemPosition.second + 0.75f, 0.0f, 1.0f};
         glm::vec4 fourthPoint {itemPosition.first + 0.75f, itemPosition.second + 0.75f, 0.0f, 1.0f};
-        glm::vec4 color = {0.53f, 0.12f, 0.47f, 0.0f};
+        glm::vec4 color = mNegativeItem.getColor();
 
         mNegativeItemId = mOpenGLHandler.addFilledRectangle(
                 firstPoint, secondPoint, thirdPoint, fourthPoint, color);
@@ -359,7 +407,7 @@ void CGameHandler::tryEndSpeedUp()
        (NUtility::getCurrentTime() - speedUpEffectDuration > mSpeedUpTime))
     {
         std::cout << "CGameHandler::" << __func__ << "(): ended" << std::endl;
-        mMoveDuration = defaultMoveDuration;
+        mMoveDuration = NUtility::defaultMoveDuration;
         mSpeedUpActive = false;
 
         mOpenGLHandler.stopSpin(mPlayerId);
@@ -378,6 +426,18 @@ void CGameHandler::tryEndRotate()
     }
 }
 
+void CGameHandler::tryEndZoom()
+{
+    if (mZoomActive &&
+       (NUtility::getCurrentTime() - zoomEffectDuration > mZoomTime))
+    {
+        std::cout << "CGameHandler::" << __func__ << "(): ended" << std::endl;
+        mZoomActive = false;
+
+        mOpenGLHandler.unZoom(2000ms);
+    }
+}
+
 void CGameHandler::rotateEffectPicked()
 {
     std::cout << "CGameHandler::" << __func__ << "()" << std::endl;
@@ -391,11 +451,20 @@ void CGameHandler::rotateEffectPicked()
 void CGameHandler::speedUpEffectPicked()
 {
     std::cout << "CGameHandler::" << __func__ << "()" << std::endl;
-    mMoveDuration = speedUpMoveDuration;
+    mMoveDuration = NUtility::speedUpMoveDuration;
 
     mSpeedUpActive = true;
     mSpeedUpTime = NUtility::getCurrentTime();
 
     mOpenGLHandler.spin(mPlayerId);
+}
+
+void CGameHandler::zoomEffectPicked()
+{
+    std::cout << "CGameHandler::" << __func__ << "()" << std::endl;
+    mOpenGLHandler.zoom(mPlayerId, 3, 2000ms);
+
+    mZoomActive = true;
+    mZoomTime = NUtility::getCurrentTime();
 }
 

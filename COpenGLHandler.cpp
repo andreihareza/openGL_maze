@@ -57,18 +57,13 @@ void COpenGLHandler::createShaders()
     glm::vec3 vert  (0.0f, 1.0f, 0.0f);
     mDefaultObserverMatrix = glm::lookAt(obsPos, refPos, vert);
 
-    mDefaultProjectionMatrix = glm::ortho(-1.0f, static_cast<float>(NUtility::lines+1),
-                                           static_cast<float>(NUtility::columns+1), -1.0f);
+    mDefaultProjectionMatrix = glm::ortho(mLeft, mRight, mDown, mUp);
+    mCurrentProjectionMatrix = mDefaultProjectionMatrix;
 
     mDefaultTransformMatrix = glm::mat4();
 
-    mCenter = glm::vec3
-    {
-        static_cast<float>(NUtility::columns)/2,
-        static_cast<float>(NUtility::lines)/2,
-        0.0f
-    };
-
+    mCenter = mDefaultCenter;
+    mVisibleSize = mDefaultVisibleSize;
     mDefaultShaderId = loadShaders("shader.vert", "shader.frag");
 
     useShader(mDefaultShaderId);
@@ -463,6 +458,11 @@ void COpenGLHandler::smoothMoveFilledRectangle(std::uint32_t startPos,
         mVboData[startPos+1] = secondPoint;
         mVboData[startPos+2] = thirdPoint;
         mVboData[startPos+3] = fourthPoint;
+        if (mIsZoomed == true)
+        {
+            mCenter = getCenterPoint(startPos);
+            updateViewedZone();
+        }
         reDraw();
         mIsMoving = false;
     }
@@ -472,6 +472,11 @@ void COpenGLHandler::smoothMoveFilledRectangle(std::uint32_t startPos,
         movePoint(mVboData[startPos+1], secondPoint, time);
         movePoint(mVboData[startPos+2], thirdPoint, time);
         movePoint(mVboData[startPos+3], fourthPoint, time);
+        if (mIsZoomed == true)
+        {
+            mCenter = getCenterPoint(startPos);
+            updateViewedZone();
+        }
         reDraw();
 
         std::uint32_t funcId = 0;
@@ -549,6 +554,14 @@ void COpenGLHandler::clearDrawData()
 void COpenGLHandler::reDraw()
 {
     // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    std::chrono::milliseconds currentTime = NUtility::getCurrentTime();
+    if (currentTime - mLastRedraw < timeInFrame)
+    {
+        std::cout << "COpenGLHandler::" << __func__ << "(): Denied" << std::endl;
+        return;
+    }
+    mLastRedraw = timeInFrame;
 
     /* Create buffer and set as active */
     glGenBuffers(1, &mVboId);
@@ -744,6 +757,160 @@ glm::mat4 COpenGLHandler::getRotateMatrix(glm::vec3 center, float angle)
     return rotationMatrix;
 }
 
+void COpenGLHandler::zoom(std::uint32_t figureId, int squares,
+        std::chrono::milliseconds time)
+{
+    std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    mIsZoomed = true;
+    smoothZoomIn(mExternalId[figureId].first, mVisibleSize - squares, squares, time);
+}
+
+void COpenGLHandler::unZoom(std::chrono::milliseconds time)
+{
+    std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    mIsZoomed = false;
+    smoothZoomOut(mDefaultVisibleSize - mVisibleSize, time);
+}
+
+void COpenGLHandler::smoothZoomIn(std::uint32_t startPos, float sizeLeft,
+        float squares, std::chrono::milliseconds time)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    if (time <= 0ms)
+    {
+        mVisibleSize = squares;
+        // std::cout << "COpenGLHandler::" << __func__ << "(): mVisibleSize=" << mVisibleSize << std::endl;
+
+        mZoomFramesLeft = 0;
+        mCenter = getCenterPoint(startPos);
+    }
+    else
+    {
+        mZoomFramesLeft = time / timeInFrame + 1;
+
+        float sizeToCut = sizeLeft / mZoomFramesLeft;
+        mVisibleSize = mVisibleSize - sizeToCut;
+
+        mCenter = getCenterPoint(startPos);
+
+        std::uint32_t funcId = 0;
+
+        do
+        {
+            funcId = NUtility::generateRandomBetween(0u, NUtility::timerFuncNum);
+        }
+        while (mTimerFunctions.find(funcId) != mTimerFunctions.end());
+
+        mTimerFunctions[funcId] = std::bind(&COpenGLHandler::smoothZoomIn,
+                this, startPos, sizeLeft - sizeToCut, squares,
+                time-timeInFrame);
+
+        glutTimerFunc(timeInFrame.count(), timerFuncCallback, funcId);
+    }
 
 
+    updateViewedZone();
+    reDraw();
+}
+
+void COpenGLHandler::smoothZoomOut(float sizeLeft, std::chrono::milliseconds time)
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+
+    if (time <= 0ms)
+    {
+        mVisibleSize = mDefaultVisibleSize;
+        // std::cout << "COpenGLHandler::" << __func__ << "(): mVisibleSize=" << mVisibleSize << std::endl;
+
+        mCenter = mDefaultCenter;
+    }
+    else
+    {
+        std::uint32_t framesLeft = time / timeInFrame + 1;
+
+        float sizeToAdd = sizeLeft / framesLeft;
+        mVisibleSize = mVisibleSize + sizeToAdd;
+
+        float distanceX = mDefaultCenter[0] - mCenter[0];
+        float distanceY = mDefaultCenter[1] - mCenter[1];
+        float distanceToMoveX = distanceX / framesLeft;
+        float distanceToMoveY = distanceY / framesLeft;
+
+        mCenter[0] += distanceToMoveX;
+        mCenter[1] += distanceToMoveY;
+
+        std::uint32_t funcId = 0;
+
+        do
+        {
+            funcId = NUtility::generateRandomBetween(0u, NUtility::timerFuncNum);
+        }
+        while (mTimerFunctions.find(funcId) != mTimerFunctions.end());
+
+        mTimerFunctions[funcId] = std::bind(&COpenGLHandler::smoothZoomOut,
+                this, sizeLeft - sizeToAdd, time-timeInFrame);
+
+        glutTimerFunc(timeInFrame.count(), timerFuncCallback, funcId);
+    }
+
+
+    updateViewedZone();
+    reDraw();
+}
+
+void COpenGLHandler::updateViewedZone()
+{
+    // std::cout << "COpenGLHandler::" << __func__ << "()" << std::endl;
+    mLeft = mCenter[0] - (mVisibleSize / 2);
+    mRight = mCenter[0] + (mVisibleSize / 2);
+
+    mUp = mCenter[1] - (mVisibleSize / 2);
+    mDown = mCenter[1] + (mVisibleSize / 2);
+
+    glm::mat4 projectionMatrix = glm::ortho(mLeft, mRight, mDown, mUp);
+
+    if (projectionMatrix != mCurrentProjectionMatrix)
+    {
+        // std::cout << "COpenGLHandler::" << __func__ << "(): sent" << std::endl;
+        glUniformMatrix4fv(mProjectionMatrixLocation, 1, false, &projectionMatrix[0][0]);
+        mCurrentProjectionMatrix = projectionMatrix;
+    }
+}
+
+glm::vec3 COpenGLHandler::getCenterPoint(std::uint32_t startPos)
+{
+    glm::vec4 center = (mVboData[startPos] + mVboData[startPos+1] +
+        mVboData[startPos+2] + mVboData[startPos+3]) / 4.0f;
+
+    glm::vec3 retCenter;
+
+    if (mZoomFramesLeft > 0)
+    {
+        glm::vec3 finalCenterPos;
+
+        finalCenterPos[0] = center[0];
+        finalCenterPos[1] = center[1];
+        finalCenterPos[2] = center[2];
+
+        float distanceX = finalCenterPos[0] - mCenter[0];
+        float distanceY = finalCenterPos[1] - mCenter[1];
+        float distanceToMoveX = distanceX / mZoomFramesLeft;
+        float distanceToMoveY = distanceY / mZoomFramesLeft;
+
+        retCenter[0] = mCenter[0] + distanceToMoveX;
+        retCenter[1] = mCenter[1] + distanceToMoveY;
+        retCenter[2] = center[2];
+    }
+    else
+    {
+        retCenter[0] = center[0];
+        retCenter[1] = center[1];
+        retCenter[2] = center[2];
+    }
+
+    return retCenter;
+}
 

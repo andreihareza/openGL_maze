@@ -2,6 +2,7 @@
 
 #include "CDropEffectNegative.hpp"
 #include "CDropEffectRotate.hpp"
+#include "CDropEffectZoom.hpp"
 #include "utility.hpp"
 
 CDropEffectNegative::CDropEffectNegative(IDropEffectListener & listener)
@@ -43,6 +44,9 @@ std::unique_ptr<CDropEffect> CDropEffectNegative::randomEffect(
     {
         case Effect::Rotate:
             effect = std::make_unique<CDropEffectRotate>(listener);
+            break;
+        case Effect::Zoom:
+            effect = std::make_unique<CDropEffectZoom>(listener);
             break;
         default:
             throw 0;

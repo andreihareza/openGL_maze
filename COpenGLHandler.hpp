@@ -50,6 +50,10 @@ public:
     void rotateScreen(std::chrono::milliseconds time, float angle);
     void stopRotate(std::chrono::milliseconds time);
 
+    void zoom(std::uint32_t figureId, int squares,
+            std::chrono::milliseconds time);
+    void unZoom(std::chrono::milliseconds time);
+
     bool isMoving();
 
 private:
@@ -85,6 +89,12 @@ private:
     std::uint32_t mProjectionMatrixLocation;
 
     glm::mat4 mCurrentTransformMatrix;
+    glm::mat4 mCurrentProjectionMatrix;
+
+    float mLeft = -1.0f;
+    float mRight = static_cast<float>(NUtility::lines+1);
+    float mUp = -1.0f;
+    float mDown = static_cast<float>(NUtility::columns+1);
     /* ************************ Shaders ************************ */
 
     /* *********************** Callbacks *********************** */
@@ -118,16 +128,6 @@ private:
     std::uint32_t mColorBufferId;
     /* ************************** VBO ************************** */
 
-
-    static COpenGLHandler * stCurrentObject;
-    IOpenGLListener & mListener;
-
-    static const constexpr std::chrono::milliseconds timeInFrame = 17ms;
-
-    std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>> mExternalId;
-    std::uint32_t mNextAvailableId = 0u;
-    std::deque<std::uint32_t> mAvailableIds;
-
     /* ************************** Spin ************************* */
     glm::mat4 getSpinMatrix(glm::vec4 center, float angle);
     void updateSpinAngle(std::uint32_t start);
@@ -147,7 +147,39 @@ private:
 
     bool mIsRotating;
     float mRotationAngle;
+    glm::vec3 mDefaultCenter =
+    {
+        static_cast<float>(NUtility::columns)/2,
+        static_cast<float>(NUtility::lines)/2,
+        0.0f
+    };
     glm::vec3 mCenter;
+
     /* ************************* Rotate ************************ */
+
+    /* ************************** Zoom ************************* */
+    void smoothZoomIn(std::uint32_t startPos, float sizeLeft,
+            float squares, std::chrono::milliseconds time);
+    void smoothZoomOut(float sizeLeft, std::chrono::milliseconds time);
+
+    void updateViewedZone();
+    glm::vec3 getCenterPoint(std::uint32_t startPos);
+
+    bool mIsZoomed = false;
+    float mVisibleSize = 0.0f;
+    float mDefaultVisibleSize = static_cast<float>
+        (std::max(NUtility::lines, NUtility::columns)) + 2.0f;
+    std::uint32_t mZoomFramesLeft;
+    /* ************************** Zoom ************************* */
+
+    static COpenGLHandler * stCurrentObject;
+    IOpenGLListener & mListener;
+
+    std::chrono::milliseconds mLastRedraw = 0ms;
+    static const constexpr std::chrono::milliseconds timeInFrame = 17ms;
+
+    std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>> mExternalId;
+    std::uint32_t mNextAvailableId = 0u;
+    std::deque<std::uint32_t> mAvailableIds;
 };
 

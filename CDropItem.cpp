@@ -75,3 +75,15 @@ NUtility::Position CDropItem::getPosition()
     return mPosition;
 }
 
+glm::vec4 CDropItem::getColor()
+{
+    if (mEffect != nullptr)
+    {
+        return mEffect->getColor();
+    }
+    else
+    {
+        return {1.0f, 1.0f, 1.0f, 1.0f};
+    }
+}
+

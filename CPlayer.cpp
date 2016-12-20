@@ -36,3 +36,9 @@ void CPlayer::move(Direction direction)
             break;
     }
 }
+
+void CPlayer::move(NUtility::Position to)
+{
+    mPosition = to;
+}
+

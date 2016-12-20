@@ -4,6 +4,7 @@
 #include <chrono>
 #include <memory>
 
+#include "COpenGLHandler.hpp"
 #include "CDropEffect.hpp"
 #include "IDropEffectListener.hpp"
 
@@ -33,6 +34,7 @@ public:
         std::uint32_t left, std::uint32_t right);
 
     NUtility::Position getPosition();
+    glm::vec4 getColor();
 
 private:
     NUtility::Position mPosition;

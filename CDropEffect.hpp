@@ -5,6 +5,7 @@
 
 #include "utility.hpp"
 #include "IDropEffectListener.hpp"
+#include "COpenGLHandler.hpp"
 
 class CDropEffect
 {
@@ -19,6 +20,8 @@ public:
             std::vector<NUtility::Position> path,
             std::uint32_t up, std::uint32_t down,
             std::uint32_t left, std::uint32_t right);
+
+    virtual glm::vec4 getColor() = 0;
 
 protected:
     IDropEffectListener & mListener;

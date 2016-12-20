@@ -26,6 +26,7 @@ private:
         First = 0u,
 
         Rotate = First,
+        Zoom,
 
         Size,
     };
